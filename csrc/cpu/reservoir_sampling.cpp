@@ -54,7 +54,7 @@ torch::Tensor reservoir_sampling_cpu(torch::Tensor& x, int k){
   torch::Tensor result = torch::empty({k}, x.options());
   int n = x.numel();
 
-  AT_DISPATCH_ALL_TYPES(x.type(), "choice", [&] {
+  AT_DISPATCH_ALL_TYPES(x.type(), "reservoir_sampling", [&] {
     sampling_kernel_cpu<scalar_t>(
       x.data<scalar_t>(),
       result.data<scalar_t>(),
