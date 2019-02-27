@@ -1,12 +1,11 @@
 #include "reservoir_sampling.h"
 
 void reservoir_generator(
-  torch::Tensor& x,
+  int64_t* x_ptr,
   int n,
   int k,
   THGenerator* generator
 ){
-  auto x_ptr = x.data<int64_t>();
   std::lock_guard<std::mutex> lock(generator->mutex);
 
   for(int i = k + 1; i <= n; i++){
@@ -30,11 +29,11 @@ void sampling_kernel_cpu(scalar_t* x_ptr, scalar_t* r_ptr, int n, int k){
   if (2 * k < n){
     begin = n - k;
     end = n;
-    reservoir_generator(indices, n, n - k, generator);
+    reservoir_generator(i_ptr, n, n - k, generator);
   } else {
     begin = 0;
     end = k;
-    reservoir_generator(indices, n, k, generator);
+    reservoir_generator(i_ptr, n, k, generator);
   }
 
   THGenerator_free(generator);
