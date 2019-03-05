@@ -1,5 +1,5 @@
 #include "cpu/reservoir_sampling.h"
-#include "cuda/reservoir_sampling.h"
+#include "cuda/reservoir_sampling.cuh"
 
 torch::Tensor reservoir_sampling(torch::Tensor& x, int k){
   if(x.type().is_cuda()){

@@ -1,24 +1,39 @@
-#include "reservoir_sampling.h"
+#include "reservoir_sampling.cuh"
+
+int const threadsPerBlock = 256;
 
 template <typename scalar_t>
-__global__ void reservoir_generator(
+__global__ void reservoir_generator_cuda(
   scalar_t *x_ptr,
   int n,
   int k,
   curandStateMtgp32 *state
 ){
 
-  for(int i = blockIdx.x * blockDim.x + threadIdx.x;
-         i < n;
+  extern __shared__ int64_t samples[];
+
+  for(int i = k + 1 + blockIdx.x * blockDim.x + threadIdx.x;
+         i <= n;
          i += blockDim.x * gridDim.x){
-    if(i < k){
-      continue;
+
+    unsigned int z = curand(state) % i;
+    samples[threadIdx.x] = z;
+    __syncthreads();
+
+    for (int j = 0; j < threadIdx.x; j++){
+      if (samples[j] == samples[threadIdx.x]){
+        z = k + 1;
+        int _i = i - threadIdx.x + j;
+        scalar_t tmp = x_ptr[_i - 1];
+        x_ptr[_i -1] = x_ptr[i - 1];
+        x_ptr[i - 1] = tmp;
+      }
     }
-    unsigned int z = curand(&state[blockIdx.x]) % (i + 1);
+
     if (z < k) {
-        scalar_t tmp = x_ptr[z];
-        x_ptr[z] = x_ptr[i];
-        x_ptr[i] = tmp;
+      scalar_t tmp = x_ptr[z];
+      x_ptr[z] = x_ptr[i - 1];
+      x_ptr[i - 1] = tmp;
     }
   }
 
@@ -26,10 +41,17 @@ __global__ void reservoir_generator(
 
 torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
 
+  // TODO: Dont clone the tensor :
+  // 1 - Check if it is contiguous, and if not, make it contiguous
+  // 2 - Generate indices and sample from it
+  // WARNING : It works on CPU, but it bugged (Segmentation fault (core dumped))
+   //           on CUDA in my 1st try.
+   
   torch::Tensor x_tmp = x.clone();
   int n = x.numel();
 
   THCState *state = at::globalContext().getTHCState();
+  THCRandom_seed(state);
   THCGenerator *generator = THCRandom_getGenerator(state);
 
   int split, begin, end;
@@ -44,8 +66,12 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
     end = k;
   }
 
+  int nb_iterations = std::min(k, n - k);
+  dim3 blocks((nb_iterations + threadsPerBlock - 1)/threadsPerBlock);
+  dim3 threads(threadsPerBlock);
+
   AT_DISPATCH_ALL_TYPES(x.type(), "reservoir_sampling", [&] {
-    reservoir_generator<scalar_t><<<1, 1>>>(
+    reservoir_generator_cuda<scalar_t><<<blocks, threads, nb_iterations * sizeof(int64_t) >>>(
       x_tmp.data<scalar_t>(),
       n,
       split,
