@@ -9,5 +9,9 @@
 
 #include <curand_kernel.h>
 
+#include <thrust/device_ptr.h>
+#include <thrust/copy.h>
+#include <thrust/swap.h>
+
 THCGenerator* THCRandom_getGenerator(THCState* state);
 torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k);

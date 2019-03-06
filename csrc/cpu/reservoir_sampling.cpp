@@ -1,8 +1,7 @@
 #include "reservoir_sampling.h"
 
-template <typename scalar_t>
 void reservoir_generator_cpu(
-  scalar_t* x_ptr,
+  int64_t* x_ptr,
   int n,
   int k,
   THGenerator* generator
@@ -20,14 +19,14 @@ void reservoir_generator_cpu(
 
 torch::Tensor reservoir_sampling_cpu(torch::Tensor& x, int k){
 
-  // TODO: Dont clone the tensor :
-  // 1 - Check if it is contiguous, and if not, make it contiguous
-  // 2 - Generate indices and sample from it
-  // WARNING : It works on CPU, but it bugged (Segmentation fault (core dumped))
-   //           on CUDA in my 1st try.
+  if (!x.is_contiguous()){
+    x = x.contiguous();
+  }
 
-  torch::Tensor x_tmp = x.clone();
   int n = x.numel();
+  auto options = x.options().dtype(torch::kLong);
+  torch::Tensor indices_k = torch::empty({k}, options);
+  torch::Tensor indices_n = torch::arange({n}, options);
 
   THGenerator* generator = THGenerator_new();
 
@@ -43,22 +42,19 @@ torch::Tensor reservoir_sampling_cpu(torch::Tensor& x, int k){
     end = k;
   }
 
-  AT_DISPATCH_ALL_TYPES(x.type(), "reservoir_sampling", [&] {
-    reservoir_generator_cpu<scalar_t>(
-      x_tmp.data<scalar_t>(),
-      n,
-      split,
-      generator);
-  });
+  reservoir_generator_cpu(
+    indices_n.data<int64_t>(),
+    n,
+    split,
+    generator);
 
   THGenerator_free(generator);
 
-  torch::Tensor idx = torch::arange(
-                        begin,
-                        end,
-                        x.options().dtype(torch::kLong)
-                      );
+  auto i_n = indices_n.data<int64_t>();
+  auto i_k = indices_k.data<int64_t>();
 
-  return x_tmp.index_select(0, idx);
+  std::copy(i_n + begin, i_n + end, i_k);
+
+  return x.index_select(0, indices_k);
 
 }
