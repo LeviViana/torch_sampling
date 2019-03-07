@@ -15,6 +15,22 @@ __global__ void generate_samples(
 
     unsigned int z = curand(state) % i;
     samples[thread_id] = z;
+
+  }
+}
+
+__global__ void generate_reservoir(
+  int64_t *indices,
+  int64_t *samples,
+  int nb_iterations,
+  int k
+){
+  for(int i = 0; i < nb_iterations; i ++){
+    int64_t z = samples[i];
+    if (z < k) {
+      thrust::swap(indices[z], indices[i + k]);
+    }
+
   }
 }
 
@@ -50,7 +66,6 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
   dim3 threads(threadsPerBlock);
 
   int64_t *samples_dev = 0;
-  int64_t *samples_host = (int64_t *)malloc(nb_iterations * sizeof(int64_t));
   cudaMalloc((void **)&samples_dev, nb_iterations * sizeof(int64_t));
 
   generate_samples<<<blocks, threads>>>(
@@ -62,26 +77,18 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
 
   cudaDeviceSynchronize();
 
-  cudaMemcpy(
-    samples_host,
+  generate_reservoir<<<1, 1>>>(
+    indices_n.data<int64_t>(),
     samples_dev,
-    nb_iterations * sizeof(int64_t),
-    cudaMemcpyDeviceToHost
+    nb_iterations,
+    split
   );
 
   auto i_n = thrust::device_ptr<int64_t>(indices_n.data<int64_t>());
-
-  for(int i=0; i < nb_iterations; i++){
-    if (samples_host[i] < split) {
-      thrust::swap(i_n[samples_host[i]], i_n[i + split]);
-    }
-  }
-
   auto i_k = thrust::device_ptr<int64_t>(indices_k.data<int64_t>());
   thrust::copy(i_n + begin, i_n + end, i_k);
 
   cudaFree(samples_dev);
-  free(samples_host);
 
   return x.index_select(0, indices_k);
 
