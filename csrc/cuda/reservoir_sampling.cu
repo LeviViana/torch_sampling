@@ -2,36 +2,20 @@
 
 int const threadsPerBlock = 256;
 
-__global__ void reservoir_generator_cuda(
-  int64_t *x_ptr,
-  int n,
+__global__ void generate_samples(
+  int64_t *samples,
   int k,
+  int n,
   curandStateMtgp32 *state
 ){
-
-  extern __shared__ int64_t samples[];
-
+  int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
   for(int i = k + 1 + blockIdx.x * blockDim.x + threadIdx.x;
-         i <= n;
-         i += blockDim.x * gridDim.x){
+      i <= n;
+      i += blockDim.x * gridDim.x){
 
     unsigned int z = curand(state) % i;
-    samples[threadIdx.x] = z;
-    __syncthreads();
-
-    for (int j = 0; j < threadIdx.x; j++){
-      if (samples[j] == samples[threadIdx.x]){
-        z = k + 1;
-        int _i = i - threadIdx.x + j;
-        thrust::swap(x_ptr[_i - 1], x_ptr[i - 1]);
-      }
-    }
-
-    if (z < k) {
-      thrust::swap(x_ptr[z], x_ptr[i - 1]);
-    }
+    samples[thread_id] = z;
   }
-
 }
 
 torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
@@ -65,16 +49,41 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
   dim3 blocks((nb_iterations + threadsPerBlock - 1)/threadsPerBlock);
   dim3 threads(threadsPerBlock);
 
-  reservoir_generator_cuda<<<blocks, threads, nb_iterations * sizeof(int64_t) >>>(
-    indices_n.data<int64_t>(),
-    n,
+  int64_t *samples_dev = 0;
+  int64_t *samples_host = (int64_t *)malloc(nb_iterations * sizeof(int64_t));
+  cudaMalloc((void **)&samples_dev, nb_iterations * sizeof(int64_t));
+
+  generate_samples<<<blocks, threads>>>(
+    samples_dev,
     split,
-    generator->state.gen_states);
+    n,
+    generator->state.gen_states
+  );
+
+  cudaDeviceSynchronize();
+
+  cudaMemcpy(
+    samples_host,
+    samples_dev,
+    nb_iterations * sizeof(int64_t),
+    cudaMemcpyDeviceToHost
+  );
 
   auto i_n = thrust::device_ptr<int64_t>(indices_n.data<int64_t>());
+
+  for(int i=0; i < nb_iterations; i++){
+    if (samples_host[i] < split) {
+      thrust::swap(i_n[samples_host[i]], i_n[i + split]);
+    }
+  }
+
   auto i_k = thrust::device_ptr<int64_t>(indices_k.data<int64_t>());
   thrust::copy(i_n + begin, i_n + end, i_k);
+
+  cudaFree(samples_dev);
+  free(samples_host);
 
   return x.index_select(0, indices_k);
 
 }
+
