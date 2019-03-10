@@ -1,11 +1,5 @@
 #include "reservoir_sampling.cuh"
 
-#include <THC/THCThrustAllocator.cuh>
-#include "thrust/device_vector.h"
-#include "thrust/sort.h"
-#include "thrust/binary_search.h"
-#include "thrust/execution_policy.h"
-
 int const threadsPerBlock = 512;
 
 __global__ void generate_samples(
@@ -23,26 +17,12 @@ __global__ void generate_reservoir(
   int nb_iterations,
   int k
 ){
-  int64_t thread_id = blockIdx.x * blockDim.x + threadIdx.x;
-
-  auto it = thrust::lower_bound(
-              thrust::device,
-              samples,
-              samples + nb_iterations,
-              thread_id
-            );
-
-  int64_t i = it - samples;
-  int64_t z = samples[i];
-  while(z == thread_id){
+  for(int i = 0; i < nb_iterations; i ++){
+    int64_t z = samples[i];
     if (z < k) {
       thrust::swap(indices[z], indices[i + k]);
     }
-    it++;
-    i = it - samples;
-    z = samples[i];
   }
-
 }
 
 torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
@@ -53,15 +33,9 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
 
   int n = x.numel();
   auto options = x.options().dtype(torch::kLong);
-  torch::Tensor indices_k = torch::arange({k}, options);
   torch::Tensor indices_n = torch::arange({n}, options);
 
   THCState *state = at::globalContext().lazyInitCUDA();
-
-  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  THCThrustAllocator allocator = THCThrustAllocator(state);
-  auto policy = thrust::cuda::par(allocator).on(stream);
-
   THCRandom_seed(state);
   THCGenerator *generator = THCRandom_getGenerator(state);
 
@@ -82,31 +56,26 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
   dim3 threads(threadsPerBlock);
 
   torch::Tensor samples = torch::arange({nb_iterations}, options);
-  samples = samples.view(-1);
-  
+
   generate_samples<<<blocks, threads>>>(
     samples.data<int64_t>(),
     split,
     generator->state.gen_states
   );
 
-  thrust::sort(
-    policy,
-    samples.data<int64_t>(),
-    samples.data<int64_t>() + samples.numel()
-  );
-
-  dim3 blocks_new((split + threadsPerBlock - 1)/threadsPerBlock);
-
-  generate_reservoir<<<blocks_new, threads>>>(
+  generate_reservoir<<<1, 1>>>(
     indices_n.data<int64_t>(),
     samples.data<int64_t>(),
     nb_iterations,
     split
   );
 
-  indices_k = indices_n.index_select(0, torch::arange(begin, end, options));
-
-  return x.index_select(0, indices_k);
+  return x.index_select(
+    0,
+    indices_n.index_select(
+      0,
+      torch::arange(begin, end, options)
+    )
+  );
 
 }
