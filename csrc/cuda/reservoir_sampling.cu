@@ -17,7 +17,7 @@ __global__ void generate_reservoir(
   int nb_iterations,
   int k
 ){
-  for(int i = 0; i < nb_iterations; i ++){
+  for(int i = 0; i < nb_iterations; i++){
     int64_t z = samples[i];
     if (z < k) {
       thrust::swap(indices[z], indices[i + k]);
