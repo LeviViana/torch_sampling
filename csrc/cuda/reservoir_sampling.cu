@@ -1,6 +1,12 @@
 #include "reservoir_sampling.cuh"
 
-int const threadsPerBlock = 256;
+#include <THC/THCThrustAllocator.cuh>
+#include "thrust/device_vector.h"
+#include "thrust/sort.h"
+#include "thrust/binary_search.h"
+#include "thrust/execution_policy.h"
+
+int const threadsPerBlock = 512;
 
 __global__ void generate_samples(
   int64_t *samples,
@@ -8,9 +14,7 @@ __global__ void generate_samples(
   curandStateMtgp32 *state
 ){
   int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
-  if (thread_id >= k){
-    samples[thread_id - k] = curand(state) % (thread_id + 1);
-  }
+  samples[thread_id] = curand(state) % (thread_id + k + 1);
 }
 
 __global__ void generate_reservoir(
@@ -19,13 +23,26 @@ __global__ void generate_reservoir(
   int nb_iterations,
   int k
 ){
-  for(int i = 0; i < nb_iterations; i ++){
-    int64_t z = samples[i];
+  int64_t thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+  auto it = thrust::lower_bound(
+              thrust::device,
+              samples,
+              samples + nb_iterations,
+              thread_id
+            );
+
+  int64_t i = it - samples;
+  int64_t z = samples[i];
+  while(z == thread_id){
     if (z < k) {
       thrust::swap(indices[z], indices[i + k]);
     }
-
+    it++;
+    i = it - samples;
+    z = samples[i];
   }
+
 }
 
 torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
@@ -36,10 +53,15 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
 
   int n = x.numel();
   auto options = x.options().dtype(torch::kLong);
-  torch::Tensor indices_k = torch::empty({k}, options);
+  torch::Tensor indices_k = torch::arange({k}, options);
   torch::Tensor indices_n = torch::arange({n}, options);
 
-  THCState *state = at::globalContext().getTHCState();
+  THCState *state = at::globalContext().lazyInitCUDA();
+
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+  THCThrustAllocator allocator = THCThrustAllocator(state);
+  auto policy = thrust::cuda::par(allocator).on(stream);
+
   THCRandom_seed(state);
   THCGenerator *generator = THCRandom_getGenerator(state);
 
@@ -59,29 +81,31 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
   dim3 blocks((nb_iterations + threadsPerBlock - 1)/threadsPerBlock);
   dim3 threads(threadsPerBlock);
 
-  int64_t *samples_dev = 0;
-  cudaMalloc((void **)&samples_dev, nb_iterations * sizeof(int64_t));
-
+  torch::Tensor samples = torch::arange({nb_iterations}, options);
+  samples = samples.view(-1);
+  
   generate_samples<<<blocks, threads>>>(
-    samples_dev,
+    samples.data<int64_t>(),
     split,
     generator->state.gen_states
   );
 
-  cudaDeviceSynchronize();
+  thrust::sort(
+    policy,
+    samples.data<int64_t>(),
+    samples.data<int64_t>() + samples.numel()
+  );
 
-  generate_reservoir<<<1, 1>>>(
+  dim3 blocks_new((split + threadsPerBlock - 1)/threadsPerBlock);
+
+  generate_reservoir<<<blocks_new, threads>>>(
     indices_n.data<int64_t>(),
-    samples_dev,
+    samples.data<int64_t>(),
     nb_iterations,
     split
   );
 
-  auto i_n = thrust::device_ptr<int64_t>(indices_n.data<int64_t>());
-  auto i_k = thrust::device_ptr<int64_t>(indices_k.data<int64_t>());
-  thrust::copy(i_n + begin, i_n + end, i_k);
-
-  cudaFree(samples_dev);
+  indices_k = indices_n.index_select(0, torch::arange(begin, end, options));
 
   return x.index_select(0, indices_k);
 
