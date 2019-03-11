@@ -35,7 +35,7 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
   auto options = x.options().dtype(torch::kLong);
   torch::Tensor indices_n = torch::arange({n}, options);
 
-  THCState *state = at::globalContext().lazyInitCUDA();
+  THCState *state = at::globalContext().getTHCState();
   THCRandom_seed(state);
   THCGenerator *generator = THCRandom_getGenerator(state);
 
