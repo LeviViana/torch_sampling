@@ -12,7 +12,7 @@ torch::Tensor reservoir_sampling(
 
   if(x.type().is_cuda()){
 #ifdef WITH_CUDA
-    return reservoir_sampling_cuda(x, k);
+    return reservoir_sampling_cuda(x, weights, k);
 #else
     AT_ERROR("Not compiled with GPU support");
 #endif
@@ -28,7 +28,7 @@ torch::Tensor reservoir_sampling(
   torch::Tensor weights = torch::empty({0});
   if(x.type().is_cuda()){
 #ifdef WITH_CUDA
-    return reservoir_sampling_cuda(x, k);
+    return reservoir_sampling_cuda(x, weights, k);
 #else
     AT_ERROR("Not compiled with GPU support");
 #endif
@@ -37,15 +37,32 @@ torch::Tensor reservoir_sampling(
   }
 }
 
+torch::Tensor choice(
+  torch::Tensor& x,
+  bool replacement,
+  int k
+){
+  if (replacement){
+    return x.index_select(0, torch::randint({k}, x.options().dtype(kLong)));
+  } else {
+    return reservoir_sampling(x, k);
+  }
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def(
     "reservoir_sampling",
     (torch::Tensor (*)(torch::Tensor&, torch::Tensor&, int)) &reservoir_sampling,
-    "Reservoir sampling implementation."
+    "Weighted Sampling implementation."
   );
   m.def(
     "reservoir_sampling",
     (torch::Tensor (*)(torch::Tensor&, int)) &reservoir_sampling,
     "Reservoir sampling implementation."
+  );
+  m.def(
+    "choice",
+    (torch::Tensor (*)(torch::Tensor&, int)) &choice,
+    "Choice implementation."
   );
 }

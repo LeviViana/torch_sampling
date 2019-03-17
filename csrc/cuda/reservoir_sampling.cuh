@@ -11,4 +11,4 @@
 #include <thrust/swap.h>
 
 THCGenerator* THCRandom_getGenerator(THCState* state);
-torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k);
+torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, torch::Tensor& weights, int k);

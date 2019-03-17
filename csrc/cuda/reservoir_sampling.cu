@@ -11,6 +11,17 @@ __global__ void generate_samples(
   samples[thread_id] = curand(state) % (thread_id + k + 1);
 }
 
+template <typename scalar_t>
+__global__ void generate_keys(
+  scalar_t *keys,
+  scalar_t *weights,
+  curandStateMtgp32 *state
+){
+  int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+  float u = curand_uniform(state);
+  keys[thread_id] = (scalar_t) __powf(u, (float) 1/weights[thread_id]);
+}
+
 __global__ void generate_reservoir(
   int64_t *indices,
   int64_t *samples,
@@ -25,7 +36,11 @@ __global__ void generate_reservoir(
   }
 }
 
-torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
+torch::Tensor reservoir_sampling_cuda(
+  torch::Tensor& x,
+  torch::Tensor &weights,
+  int k
+){
 
   if (!x.is_contiguous()){
     x = x.contiguous();
@@ -33,49 +48,66 @@ torch::Tensor reservoir_sampling_cuda(torch::Tensor& x, int k){
 
   int n = x.numel();
   auto options = x.options().dtype(torch::kLong);
-  torch::Tensor indices_n = torch::arange({n}, options);
+  dim3 threads(threadsPerBlock);
 
   THCState *state = at::globalContext().getTHCState();
   THCRandom_seed(state);
   THCGenerator *generator = THCRandom_getGenerator(state);
 
-  int split, begin, end;
+  if (weights.numel() == 0){
+    torch::Tensor indices_n = torch::arange({n}, options);
 
-  if(2 * k < n){
-    split = n - k;
-    begin = n - k;
-    end = n;
-  } else {
-    split = k;
-    begin = 0;
-    end = k;
-  }
+    int split, begin, end;
 
-  int nb_iterations = std::min(k, n - k);
-  dim3 blocks((nb_iterations + threadsPerBlock - 1)/threadsPerBlock);
-  dim3 threads(threadsPerBlock);
+    if(2 * k < n){
+      split = n - k;
+      begin = n - k;
+      end = n;
+    } else {
+      split = k;
+      begin = 0;
+      end = k;
+    }
 
-  torch::Tensor samples = torch::arange({nb_iterations}, options);
+    int nb_iterations = std::min(k, n - k);
+    dim3 blocks((nb_iterations + threadsPerBlock - 1)/threadsPerBlock);
 
-  generate_samples<<<blocks, threads>>>(
-    samples.data<int64_t>(),
-    split,
-    generator->state.gen_states
-  );
+    torch::Tensor samples = torch::arange({nb_iterations}, options);
 
-  generate_reservoir<<<1, 1>>>(
-    indices_n.data<int64_t>(),
-    samples.data<int64_t>(),
-    nb_iterations,
-    split
-  );
+    generate_samples<<<blocks, threads>>>(
+      samples.data<int64_t>(),
+      split,
+      generator->state.gen_states
+    );
 
-  return x.index_select(
-    0,
-    indices_n.index_select(
+    generate_reservoir<<<1, 1>>>(
+      indices_n.data<int64_t>(),
+      samples.data<int64_t>(),
+      nb_iterations,
+      split
+    );
+
+    return x.index_select(
       0,
-      torch::arange(begin, end, options)
-    )
-  );
+      indices_n.index_select(
+        0,
+        torch::arange(begin, end, options)
+      )
+    );
+
+  } else {
+    torch::Tensor keys = torch::empty({n}, weights.options());
+    dim3 all_blocks((n + threadsPerBlock - 1)/threadsPerBlock);
+
+    AT_DISPATCH_FLOATING_TYPES(weights.type(), "generate keys", [&] {
+      generate_keys<scalar_t><<<all_blocks, threads>>>(
+        keys.data<scalar_t>(),
+        weights.data<scalar_t>(),
+        generator->state.gen_states
+      );
+    });
+
+    return x.index_select(0, std::get<1>(keys.topk(k)));
+  }
 
 }
