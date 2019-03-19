@@ -37,15 +37,49 @@ torch::Tensor reservoir_sampling(
   }
 }
 
+torch::Tensor sampling_with_replacement(
+  torch::Tensor& x,
+  torch::Tensor &weights,
+  int k
+){
+  int n = x.numel();
+  torch::Tensor samples;
+
+  if (weights.numel() == 0){
+    samples = torch::randint(0, n, {k}, x.options().dtype(torch::kLong));
+  } else {
+    torch::Tensor uniform_samples = torch::rand({k});
+    torch::Tensor cdf = weights.cumsum(0);
+    cdf /= cdf[-1];
+    samples = (uniform_samples.unsqueeze(1) > cdf.unsqueeze(0)).sum(1);
+  }
+
+  return x.index_select(0, samples);
+}
+
+torch::Tensor choice(
+  torch::Tensor& x,
+  torch::Tensor& weights,
+  bool replacement,
+  int k
+){
+  if (replacement){
+    return sampling_with_replacement(x, weights, k);
+  } else {
+    return reservoir_sampling(x, weights, k);
+  }
+}
+
 torch::Tensor choice(
   torch::Tensor& x,
   bool replacement,
   int k
 ){
+  torch::Tensor weights = torch::empty({0});
   if (replacement){
-    return x.index_select(0, torch::randint({k}, x.options().dtype(kLong)));
+    return sampling_with_replacement(x, weights, k);
   } else {
-    return reservoir_sampling(x, k);
+    return reservoir_sampling(x, weights, k);
   }
 }
 
@@ -62,7 +96,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   );
   m.def(
     "choice",
-    (torch::Tensor (*)(torch::Tensor&, int)) &choice,
+    (torch::Tensor (*)(torch::Tensor&, bool, int)) &choice,
+    "Choice implementation."
+  );
+  m.def(
+    "choice",
+    (torch::Tensor (*)(torch::Tensor&, torch::Tensor&, bool, int)) &choice,
     "Choice implementation."
   );
 }
