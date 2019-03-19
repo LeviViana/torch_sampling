@@ -48,13 +48,10 @@ torch::Tensor sampling_with_replacement(
   if (weights.numel() == 0){
     samples = torch::randint(0, n, {k}, x.options().dtype(torch::kLong));
   } else {
+    torch::Tensor uniform_samples = torch::rand({k}, weights.options());
     torch::Tensor cdf = weights.cumsum(0);
     cdf /= cdf[-1];
-    samples = torch::empty({0}, x.options().dtype(torch::kLong));
-    for(int i=0; i < k; i++){
-      torch::Tensor uniform_sample = torch::rand({1}, weights.options());
-      samples = torch::cat({samples, (uniform_sample > cdf).sum().unsqueeze(0)});
-    }
+    samples = (uniform_samples.unsqueeze(1) > cdf.unsqueeze(0)).sum(1);
   }
 
   return x.index_select(0, samples);
