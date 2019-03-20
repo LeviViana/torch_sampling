@@ -33,9 +33,9 @@ void reservoir_generator_cpu(
 
 }
 
-torch::Tensor reservoir_sampling_cpu(
-  torch::Tensor& x,
-  torch::Tensor &weights,
+at::Tensor reservoir_sampling_cpu(
+  at::Tensor& x,
+  at::Tensor &weights,
   int k
 ){
 
@@ -47,7 +47,7 @@ torch::Tensor reservoir_sampling_cpu(
   THGenerator* generator = THGenerator_new();
 
   if (weights.numel() == 0){
-    torch::Tensor indices_n = torch::arange({n}, options);
+    at::Tensor indices_n = torch::arange({n}, options);
     int split, begin, end;
     if(2 * k < n){
       split = n - k;
@@ -75,7 +75,7 @@ torch::Tensor reservoir_sampling_cpu(
       );
 
   } else {
-    torch::Tensor keys = torch::empty({n}, weights.options());
+    at::Tensor keys = torch::empty({n}, weights.options());
 
     AT_DISPATCH_FLOATING_TYPES(weights.type(), "generate keys", [&] {
       generate_keys<scalar_t>(

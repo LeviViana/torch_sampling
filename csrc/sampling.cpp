@@ -4,9 +4,9 @@
 #include "cuda/reservoir_sampling.cuh"
 #endif
 
-torch::Tensor reservoir_sampling(
-  torch::Tensor& x,
-  torch::Tensor& weights,
+at::Tensor reservoir_sampling(
+  at::Tensor& x,
+  at::Tensor& weights,
   int k
 ){
 
@@ -21,11 +21,11 @@ torch::Tensor reservoir_sampling(
   }
 }
 
-torch::Tensor reservoir_sampling(
-  torch::Tensor& x,
+at::Tensor reservoir_sampling(
+  at::Tensor& x,
   int k
 ){
-  torch::Tensor weights = torch::empty({0});
+  at::Tensor weights = torch::empty({0});
   if(x.type().is_cuda()){
 #ifdef WITH_CUDA
     return reservoir_sampling_cuda(x, weights, k);
@@ -37,19 +37,19 @@ torch::Tensor reservoir_sampling(
   }
 }
 
-torch::Tensor sampling_with_replacement(
-  torch::Tensor& x,
-  torch::Tensor &weights,
+at::Tensor sampling_with_replacement(
+  at::Tensor& x,
+  at::Tensor &weights,
   int k
 ){
   int n = x.numel();
-  torch::Tensor samples;
+  at::Tensor samples;
 
   if (weights.numel() == 0){
     samples = torch::randint(0, n, {k}, x.options().dtype(torch::kLong));
   } else {
-    torch::Tensor uniform_samples = torch::rand({k}, weights.options());
-    torch::Tensor cdf = weights.cumsum(0);
+    at::Tensor uniform_samples = torch::rand({k}, weights.options());
+    at::Tensor cdf = weights.cumsum(0);
     cdf /= cdf[-1];
     samples = (uniform_samples.unsqueeze(1) > cdf.unsqueeze(0)).sum(1);
   }
@@ -57,9 +57,9 @@ torch::Tensor sampling_with_replacement(
   return x.index_select(0, samples);
 }
 
-torch::Tensor choice(
-  torch::Tensor& x,
-  torch::Tensor& weights,
+at::Tensor choice(
+  at::Tensor& x,
+  at::Tensor& weights,
   bool replacement,
   int k
 ){
@@ -70,12 +70,12 @@ torch::Tensor choice(
   }
 }
 
-torch::Tensor choice(
-  torch::Tensor& x,
+at::Tensor choice(
+  at::Tensor& x,
   bool replacement,
   int k
 ){
-  torch::Tensor weights = torch::empty({0});
+  at::Tensor weights = torch::empty({0});
   if (replacement){
     return sampling_with_replacement(x, weights, k);
   } else {
@@ -86,22 +86,22 @@ torch::Tensor choice(
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def(
     "reservoir_sampling",
-    (torch::Tensor (*)(torch::Tensor&, torch::Tensor&, int)) &reservoir_sampling,
+    (at::Tensor (*)(at::Tensor&, at::Tensor&, int)) &reservoir_sampling,
     "Weighted Sampling implementation."
   );
   m.def(
     "reservoir_sampling",
-    (torch::Tensor (*)(torch::Tensor&, int)) &reservoir_sampling,
+    (at::Tensor (*)(at::Tensor&, int)) &reservoir_sampling,
     "Reservoir sampling implementation."
   );
   m.def(
     "choice",
-    (torch::Tensor (*)(torch::Tensor&, bool, int)) &choice,
+    (at::Tensor (*)(at::Tensor&, bool, int)) &choice,
     "Choice implementation."
   );
   m.def(
     "choice",
-    (torch::Tensor (*)(torch::Tensor&, torch::Tensor&, bool, int)) &choice,
+    (at::Tensor (*)(at::Tensor&, at::Tensor&, bool, int)) &choice,
     "Choice implementation."
   );
 }

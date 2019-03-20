@@ -4,4 +4,4 @@
 
 #include <math.h>
 
-torch::Tensor reservoir_sampling_cpu(torch::Tensor& x, torch::Tensor &weights, int k);
+at::Tensor reservoir_sampling_cpu(at::Tensor& x, at::Tensor &weights, int k);

@@ -36,9 +36,9 @@ __global__ void generate_reservoir(
   }
 }
 
-torch::Tensor reservoir_sampling_cuda(
-  torch::Tensor& x,
-  torch::Tensor &weights,
+at::Tensor reservoir_sampling_cuda(
+  at::Tensor& x,
+  at::Tensor &weights,
   int k
 ){
 
@@ -55,7 +55,7 @@ torch::Tensor reservoir_sampling_cuda(
   THCGenerator *generator = THCRandom_getGenerator(state);
 
   if (weights.numel() == 0){
-    torch::Tensor indices_n = torch::arange({n}, options);
+    at::Tensor indices_n = torch::arange({n}, options);
 
     int split, begin, end;
 
@@ -72,7 +72,7 @@ torch::Tensor reservoir_sampling_cuda(
     int nb_iterations = std::min(k, n - k);
     dim3 blocks((nb_iterations + threadsPerBlock - 1)/threadsPerBlock);
 
-    torch::Tensor samples = torch::arange({nb_iterations}, options);
+    at::Tensor samples = torch::arange({nb_iterations}, options);
 
     generate_samples<<<blocks, threads>>>(
       samples.data<int64_t>(),
@@ -96,7 +96,7 @@ torch::Tensor reservoir_sampling_cuda(
     );
 
   } else {
-    torch::Tensor keys = torch::empty({n}, weights.options());
+    at::Tensor keys = torch::empty({n}, weights.options());
     dim3 all_blocks((n + threadsPerBlock - 1)/threadsPerBlock);
 
     AT_DISPATCH_FLOATING_TYPES(weights.type(), "generate keys", [&] {
