@@ -1,7 +1,9 @@
 #include <torch/extension.h>
-#include <TH/THRandom.h>
-#include <TH/THGenerator.hpp>
+#include <ATen/core/Generator.h>
+#include <ATen/CPUGenerator.h>
+#include <ATen/core/DistributionsHelper.h>
 
 #include <math.h>
 
-at::Tensor reservoir_sampling_cpu(at::Tensor& x, at::Tensor &weights, int k);
+at::Tensor choice_cpu(at::Tensor& input, int64_t k, bool replace, at::Tensor& weights);
+at::Tensor choice_cpu(at::Tensor& input, int64_t k, bool replace);
