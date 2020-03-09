@@ -4,11 +4,29 @@
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
 
-#include <THC/THC.h>
-#include <THC/THCGenerator.hpp>
-
+#include <ATen/CUDAGenerator.h>
+#include <curand.h>
 #include <curand_kernel.h>
-#include <thrust/swap.h>
+#include <curand_philox4x32_x.h>
+#include <THC/THCTensorRandom.h>
+#include <thrust/execution_policy.h>
+#include <thrust/binary_search.h>
 
-THCGenerator* THCRandom_getGenerator(THCState* state);
-at::Tensor reservoir_sampling_cuda(at::Tensor& x, at::Tensor& weights, int k);
+//#include <THC/THC.h>
+//#include <THC/THCGenerator.hpp>
+
+//#include <curand_kernel.h>
+//#include <thrust/swap.h>
+
+at::Tensor choice_cuda(
+  at::Tensor& input,
+  int64_t k,
+  bool replace
+);
+
+at::Tensor choice_cuda(
+  at::Tensor& input,
+  int64_t k,
+  bool replace,
+  at::Tensor& weights
+);
