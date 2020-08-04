@@ -4,7 +4,7 @@
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
 
-#include <ATen/CUDAGenerator.h>
+#include <ATen/CUDAGeneratorImpl.h>
 #include <curand.h>
 #include <curand_kernel.h>
 #include <curand_philox4x32_x.h>

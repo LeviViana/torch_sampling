@@ -102,8 +102,8 @@ at::Tensor reservoir_sampling_cuda(
   auto options = x.options().dtype(at::kLong);
   dim3 threads(threadsPerBlock);
 
-  auto gen = at::get_generator_or_default<at::CUDAGenerator>(
-    nullptr,
+  auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
+    at::cuda::detail::getDefaultCUDAGenerator(),
     at::cuda::detail::getDefaultCUDAGenerator()
   );
 
@@ -252,8 +252,8 @@ at::Tensor sampling_with_replacement_cuda(
     THAssert(props != NULL);
     int threadsPerBlock = props->maxThreadsPerBlock;
 
-    auto gen = at::get_generator_or_default<at::CUDAGenerator>(
-      nullptr,
+    auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
+      at::cuda::detail::getDefaultCUDAGenerator(),
       at::cuda::detail::getDefaultCUDAGenerator()
     );
 

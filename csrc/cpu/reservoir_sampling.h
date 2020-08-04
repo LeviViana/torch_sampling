@@ -1,6 +1,6 @@
 #include <torch/extension.h>
 #include <ATen/core/Generator.h>
-#include <ATen/CPUGenerator.h>
+#include <ATen/CPUGeneratorImpl.h>
 #include <ATen/core/DistributionsHelper.h>
 
 #include <math.h>

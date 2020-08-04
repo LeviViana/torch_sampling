@@ -5,7 +5,7 @@ void generate_keys(
   float *keys,
   float *weights,
   int n,
-  at::CPUGenerator* generator
+  at::CPUGeneratorImpl* generator
 ){
   std::lock_guard<std::mutex> lock(generator->mutex_);
   at::uniform_real_distribution<double> standard_uniform(0.0, 1.0);
@@ -21,7 +21,7 @@ void reservoir_generator_cpu(
   int64_t *indices,
   int64_t n,
   int64_t k,
-  at::CPUGenerator* generator
+  at::CPUGeneratorImpl* generator
 ){
   std::lock_guard<std::mutex> lock(generator->mutex_);
 
@@ -53,8 +53,8 @@ at::Tensor reservoir_sampling_cpu(
   );
 
   auto options = x.options().dtype(at::kLong);
-  at::CPUGenerator* generator = at::get_generator_or_default<at::CPUGenerator>(
-                              nullptr,
+  at::CPUGeneratorImpl* generator = at::get_generator_or_default<at::CPUGeneratorImpl>(
+			      at::detail::getDefaultCPUGenerator(),
                               at::detail::getDefaultCPUGenerator()
                             );
 
@@ -165,8 +165,8 @@ at::Tensor sampling_with_replacement_cpu(
       "The weights must 1-dimensional."
     );
 
-    at::CPUGenerator* generator = at::get_generator_or_default<at::CPUGenerator>(
-                                nullptr,
+    at::CPUGeneratorImpl* generator = at::get_generator_or_default<at::CPUGeneratorImpl>(
+                	        at::detail::getDefaultCPUGenerator(),
                                 at::detail::getDefaultCPUGenerator()
                               );
 
