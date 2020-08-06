@@ -3,6 +3,7 @@ import glob
 
 import torch
 from setuptools import setup
+from packaging import version
 from torch.utils.cpp_extension import CUDA_HOME
 from torch.utils.cpp_extension import CppExtension
 from torch.utils.cpp_extension import CUDAExtension
@@ -23,6 +24,9 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
     extension = CUDAExtension
     sources += source_cuda
     define_macros += [("WITH_CUDA", None)]
+
+if version.parse(torch.__version__) >= version.parse('1.6.0'):
+    define_macros += [("TORCH_1_6", None)]
 
 setup(
     name='torch_sampling',

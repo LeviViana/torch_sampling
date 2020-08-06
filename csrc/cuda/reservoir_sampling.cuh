@@ -4,7 +4,11 @@
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
 
+#ifdef TORCH_1_6
 #include <ATen/CUDAGeneratorImpl.h>
+#else
+#include <ATen/CUDAGenerator.h>
+#endif
 #include <curand.h>
 #include <curand_kernel.h>
 #include <curand_philox4x32_x.h>

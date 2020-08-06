@@ -102,10 +102,17 @@ at::Tensor reservoir_sampling_cuda(
   auto options = x.options().dtype(at::kLong);
   dim3 threads(threadsPerBlock);
 
+#ifdef TORCH_1_6
   auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
     at::cuda::detail::getDefaultCUDAGenerator(),
     at::cuda::detail::getDefaultCUDAGenerator()
   );
+#else
+  auto gen = at::get_generator_or_default<at::CUDAGenerator>(
+    nullptr,
+    at::cuda::detail::getDefaultCUDAGenerator()
+  );
+#endif
 
   std::pair<uint64_t, uint64_t> next_philox_seed;
   {
@@ -252,10 +259,17 @@ at::Tensor sampling_with_replacement_cuda(
     THAssert(props != NULL);
     int threadsPerBlock = props->maxThreadsPerBlock;
 
+#ifdef TORCH_1_6
     auto gen = at::get_generator_or_default<at::CUDAGeneratorImpl>(
       at::cuda::detail::getDefaultCUDAGenerator(),
       at::cuda::detail::getDefaultCUDAGenerator()
     );
+#else
+    auto gen = at::get_generator_or_default<at::CUDAGenerator>(
+      nullptr,
+      at::cuda::detail::getDefaultCUDAGenerator()
+    );
+#endif
 
     std::pair<uint64_t, uint64_t> next_philox_seed;
     {
