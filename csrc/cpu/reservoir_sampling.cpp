@@ -5,7 +5,11 @@ void generate_keys(
   float *keys,
   float *weights,
   int n,
+#ifdef TORCH_1_6
+  at::CPUGeneratorImpl* generator
+#else
   at::CPUGenerator* generator
+#endif
 ){
   std::lock_guard<std::mutex> lock(generator->mutex_);
   at::uniform_real_distribution<double> standard_uniform(0.0, 1.0);
@@ -21,7 +25,11 @@ void reservoir_generator_cpu(
   int64_t *indices,
   int64_t n,
   int64_t k,
+#ifdef TORCH_1_6
+  at::CPUGeneratorImpl* generator
+#else
   at::CPUGenerator* generator
+#endif
 ){
   std::lock_guard<std::mutex> lock(generator->mutex_);
 
@@ -53,10 +61,17 @@ at::Tensor reservoir_sampling_cpu(
   );
 
   auto options = x.options().dtype(at::kLong);
+#ifdef TORCH_1_6
+  at::CPUGeneratorImpl* generator = at::get_generator_or_default<at::CPUGeneratorImpl>(
+			      at::detail::getDefaultCPUGenerator(),
+			      at::detail::getDefaultCPUGenerator()
+			    );
+#else
   at::CPUGenerator* generator = at::get_generator_or_default<at::CPUGenerator>(
-                              nullptr,
-                              at::detail::getDefaultCPUGenerator()
-                            );
+			      nullptr,
+			      at::detail::getDefaultCPUGenerator()
+			    );
+#endif
 
   if (weights.numel() == 0){ // Uniform Sampling
     at::Tensor indices_n = at::arange({n}, options);
@@ -164,11 +179,17 @@ at::Tensor sampling_with_replacement_cpu(
       weights.dim() == 1,
       "The weights must 1-dimensional."
     );
-
+#ifdef TORCH_1_6
+    at::CPUGeneratorImpl* generator = at::get_generator_or_default<at::CPUGeneratorImpl>(
+			      at::detail::getDefaultCPUGenerator(),
+			      at::detail::getDefaultCPUGenerator()
+			    );
+#else
     at::CPUGenerator* generator = at::get_generator_or_default<at::CPUGenerator>(
-                                nullptr,
-                                at::detail::getDefaultCPUGenerator()
-                              );
+			      nullptr,
+			      at::detail::getDefaultCPUGenerator()
+			    );
+#endif
 
     samples = at::empty({k}, x.options().dtype(at::kLong));
     int64_t *samples_ptr = samples.data_ptr<int64_t>();
