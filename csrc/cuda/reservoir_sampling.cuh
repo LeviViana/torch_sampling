@@ -12,7 +12,11 @@
 #include <curand.h>
 #include <curand_kernel.h>
 #include <curand_philox4x32_x.h>
+#ifdef TORCH_1_8
+#include <TH/THTensor.h>
+#else
 #include <THC/THCTensorRandom.h>
+#endif
 #include <thrust/execution_policy.h>
 #include <thrust/binary_search.h>
 

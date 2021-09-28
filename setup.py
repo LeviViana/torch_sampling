@@ -27,6 +27,11 @@ if torch.cuda.is_available() and CUDA_HOME is not None:
 
 if version.parse(torch.__version__) >= version.parse('1.6.0'):
     define_macros += [("TORCH_1_6", None)]
+if version.parse(torch.__version__) > version.parse('1.8.0'):
+    define_macros += [("TORCH_1_8", None)]
+
+
+
 
 setup(
     name='torch_sampling',
