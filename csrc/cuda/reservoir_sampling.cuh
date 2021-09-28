@@ -13,7 +13,7 @@
 #include <curand_kernel.h>
 #include <curand_philox4x32_x.h>
 #ifdef TORCH_1_8
-#include <TH/THTensor.h>
+#include <THC/THCTensor.h>
 #else
 #include <THC/THCTensorRandom.h>
 #endif
